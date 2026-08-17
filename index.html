@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Retimer</title>
+	<script src="https://www.youtube.com/iframe_api" defer></script>
+	<script>
+		// @ts-check
+		/**
+		 * @typedef {import('./youtube_api.d.ts').YT} YT
+		 */
+
+		/**
+		 * @type {YT.Player}
+		 */
+		let player;
+
+		const INVALID_TIME_TEXT = "?h ?m ?s ???ms";
+
+		const VIDEO_URL_PARAM = "video";
+		const START_TIME_PARAM = "start";
+		const END_TIME_PARAM = "end";
+
+		const videoUrlInput = document.getElementById("video-url");
+
+		const backwardFiveFramesButton = document.getElementById("step-backward-five-frames-button");
+		const backwardFrameButton = document.getElementById("step-backward-frame-button");
+		const forwardFrameButton = document.getElementById("step-forward-frame-button");
+		const forwardFiveFramesButton = document.getElementById("step-forward-five-frames-button");
+
+		const setStartTimeButton = document.getElementById("set-start-time-button");
+		const setEndTimeButton = document.getElementById("set-end-time-button");
+
+		const goToStartTimeButton = document.getElementById("go-to-start-time-button");
+		const goToEndTimeButton = document.getElementById("go-to-end-time-button");
+
+		const startTimeInput = document.getElementById("start-time");
+		const endTimeInput = document.getElementById("end-time");
+
+		const frameCountText = document.getElementById("frame-count");
+		const finalTimeText = document.getElementById("final-time");
+
+		// Read URL parameters and set the video URL and time input value if present
+		const urlParams = new URLSearchParams(window.location.search);
+		const videoId = urlParams.get(VIDEO_URL_PARAM);
+		if (videoId && videoUrlInput instanceof HTMLInputElement) {
+			videoUrlInput.value = videoId;
+		}
+		const start = urlParams.get(START_TIME_PARAM);
+		if (start && startTimeInput instanceof HTMLInputElement) {
+			startTimeInput.value = start;
+		}
+		const end = urlParams.get(END_TIME_PARAM);
+		if (end && endTimeInput instanceof HTMLInputElement) {
+			endTimeInput.value = end;
+		}
+
+		if (start && end) {
+			calculateTime();
+		}
+
+		videoUrlInput?.addEventListener("input", (event) => {
+			if (!event.target || !(event.target instanceof HTMLInputElement)) return;
+
+			const urlOrId = event.target.value;
+			const videoId = extractVideoId(urlOrId);
+			if (!player || !videoId) return;
+
+			player.loadVideoById(videoId);
+			const url = new URL(window.location.href);
+			url.searchParams.set(VIDEO_URL_PARAM, videoId);
+			window.history.replaceState({}, "", url);
+		});
+
+		/**
+		 * Extracts the video Id from a YouTube URL or returns the input if it's already an Id.
+		 * @param {string} urlOrId 
+		 * @returns {string}
+		 */
+		function extractVideoId(urlOrId) {
+			const youtubeUrlRegex = /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
+			const match = urlOrId.match(youtubeUrlRegex);
+			return match ? match[1] : urlOrId;
+		}
+
+		function onYouTubeIframeAPIReady() {
+			player = new YT.Player('player', {
+				height: '900',
+				width: '1600',
+				playerVars: {
+					'playsinline': 1
+				},
+				events: {
+					'onReady': onPlayerReady,
+					'onStateChange': onPlayerStateChange,
+				},
+				...(videoId ? { videoId } : {})
+			});
+		}
+
+		/**
+		 * @param {YT.PlayerEvent} event
+		 */
+		function onPlayerReady(event) {
+			console.log("Ready", event)
+			event.target.playVideo();
+			event.target.setPlaybackQuality('4k');
+		}
+
+
+		/**
+		 * @param {YT.PlayerEvent} event
+		 */
+		function onPlayerStateChange(event) {
+			console.log("Change", event)
+
+			console.log(player.getCurrentTime())
+		}
+
+		startTimeInput?.addEventListener("input", calculateTime);
+		endTimeInput?.addEventListener("input", calculateTime);
+
+		function calculateTime() {
+			if (!finalTimeText || !frameCountText || !(startTimeInput instanceof HTMLInputElement) || !(endTimeInput instanceof HTMLInputElement)) return;
+
+			const startTime = parseFloat(startTimeInput.value);
+			const endTime = parseFloat(endTimeInput.value);
+
+			if (isNaN(startTime) || isNaN(endTime)) {
+				finalTimeText.textContent = INVALID_TIME_TEXT;
+				return;
+			}
+
+			const rawFinalTime = endTime - startTime;
+
+			const finalTime = timeToPossibleFrameTime(rawFinalTime, 60, false);
+
+			// Format time like "0h 0m 0s 000ms"
+			const hours = Math.floor(finalTime / 3600);
+			const minutes = Math.floor((finalTime % 3600) / 60);
+			const seconds = Math.floor(finalTime % 60);
+			const milliseconds = Math.floor((finalTime % 1) * 1000);
+
+			frameCountText.textContent = `${Math.round(finalTime * 60)} frames`;
+			finalTimeText.textContent = `${hours}h ${minutes}m ${seconds}s ${milliseconds}ms`;
+
+			// Set URL parameters in case the user wants to share the link
+			const url = new URL(window.location.href);
+			url.searchParams.set(START_TIME_PARAM, startTime.toString());
+			url.searchParams.set(END_TIME_PARAM, endTime.toString());
+			window.history.replaceState({}, "", url);
+		}
+
+		/**
+		 * 
+		 * @param {number} frames 
+		 * @returns {void}
+		 */
+		function adjustFrame(frames) {
+			if (!player) return;
+
+			const currentTime = player.getCurrentTime();
+			const frameDuration = 1 / 60; // Assuming 60 FPS, adjust if needed
+
+			const newTime = currentTime + frames * frameDuration;
+			goToTime(newTime);
+		}
+
+		forwardFrameButton?.addEventListener("click", () => {
+			adjustFrame(1);
+		});
+
+		backwardFrameButton?.addEventListener("click", () => {
+			adjustFrame(-1);
+		});
+
+		forwardFiveFramesButton?.addEventListener("click", () => {
+			adjustFrame(5);
+		});
+
+		backwardFiveFramesButton?.addEventListener("click", () => {
+			adjustFrame(-5);
+		});
+
+		setStartTimeButton?.addEventListener("click", () => {
+			if (!player || !(startTimeInput instanceof HTMLInputElement)) return;
+
+			const currentTime = timeToPossibleFrameTime(player.getCurrentTime());
+			startTimeInput.value = currentTime.toString();
+			calculateTime();
+		});
+
+		setEndTimeButton?.addEventListener("click", () => {
+			if (!player || !(endTimeInput instanceof HTMLInputElement)) return;
+
+			const currentTime = timeToPossibleFrameTime(player.getCurrentTime());
+			endTimeInput.value = currentTime.toString();
+			calculateTime();
+		});
+
+		/**
+		 * 
+		 * @param {number} time 
+		 * @returns {void}
+		 */
+		function goToTime(time) {
+			if (!player) return;
+
+			player.seekTo(time, true);
+		}
+
+		goToStartTimeButton?.addEventListener("click", () => {
+			if (!(startTimeInput instanceof HTMLInputElement)) return;
+
+			const startTime = parseFloat(startTimeInput.value);
+			if (isNaN(startTime)) return;
+
+			goToTime(startTime);
+		});
+
+		goToEndTimeButton?.addEventListener("click", () => {
+			if (!(endTimeInput instanceof HTMLInputElement)) return;
+
+			const endTime = parseFloat(endTimeInput.value);
+			if (isNaN(endTime)) return;
+
+			goToTime(endTime);
+		});
+
+		/**
+		 * 
+		 * @param {number} time 
+		 * @param {number} fps 
+		 * @param {boolean} addFrame
+		 * @returns {number}
+		 */
+		function timeToPossibleFrameTime(time, fps = 60, addFrame = true) {
+			const frameDuration = 1 / fps;
+			return Math.floor(time / frameDuration) * frameDuration + (addFrame ? frameDuration : 0); // Add one frame to ensure we round up to the next frame
+		}
+
+		if (finalTimeText) {
+			finalTimeText.onclick = () => {
+				// Copy the final time text to the clipboard
+				navigator.clipboard.writeText(finalTimeText.textContent ?? "").then(() => {
+					console.log("Final time copied to clipboard");
+				}).catch((err) => {
+					console.error("Could not copy final time to clipboard", err);
+				});
+			};
+		}
+	</script>
+	<style>
+		:root {
+			color-scheme: light dark;
+			--bg-colour: light-dark(#dbfff4, #0b0b0b);
+			--text-colour: light-dark(#000, #fff);
+		}
+
+		body {
+			background-color: var(--bg-colour);
+			color: var(--text-colour);
+			font-family: Arial, sans-serif;
+			margin: 0;
+			padding: 0;
+
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			gap: 20px;
+		}
+
+		h1 {
+			margin: 0;
+			margin-top: 20px;
+		}
+
+		#video-url {
+			min-width: 300px;
+			width: fit-content;
+			text-align: center;
+		}
+
+		#video-controls {
+			display: flex;
+			gap: 10px;
+		}
+
+		#time-controls {
+			display: flex;
+			gap: 10px;
+		}
+
+		.time-input {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			gap: 5px;
+
+			.set {
+				width: 100%;
+				font-size: 1.2em;
+				height: 30px;
+			}
+		}
+
+		#result {
+			display: flex;
+			align-items: center;
+			flex-direction: column;
+			font-family: monospace;
+
+			#final-time {
+				font-size: 3em;
+				margin: 0;
+
+				cursor: pointer;
+
+				&:active {
+					color: light-dark(#3f3f3f, #b6b6b6);
+				}
+			}
+		}
+	</style>
+</head>
+
+<body>
+	<h1>Retimer</h1>
+	<input type="text" id="video-url" placeholder="Enter YouTube Video ID or URL">
+	<div id="player"></div>
+	<div id="video-controls">
+		<button id="step-backward-five-frames-button">-5 Frames</button>
+		<button id="step-backward-frame-button">-1 Frame</button>
+		<button id="step-forward-frame-button">+1 Frame</button>
+		<button id="step-forward-five-frames-button">+5 Frames</button>
+	</div>
+	<div id="time-controls">
+		<div class="time-input">
+			<button id="set-start-time-button" class="set">Set Start</button>
+			<input type="number" id="start-time" placeholder="Start Time (seconds)">
+			<button id="go-to-start-time-button" class="seek">Go To Start</button>
+		</div>
+		<div class="time-input">
+			<button id="set-end-time-button" class="set">Set End</button>
+			<input type="number" id="end-time" placeholder="End Time (seconds)">
+			<button id="go-to-end-time-button" class="seek">Go To End</button>
+		</div>
+	</div>
+	<div id="result">
+		<span id="frame-count"></span>
+		<h2 id="final-time">?h ?m ?s ???ms</h2>
+	</div>
+</body>
+
+</html>
