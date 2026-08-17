@@ -446,6 +446,11 @@
 			frameRate = newFrameRate;
 			customFrameRateInput.value = newFrameRate.toString();
 			calculateTime();
+
+			// Set URL parameters in case the user wants to share the link
+			const url = new URL(window.location.href);
+			url.searchParams.set("frameRate", newFrameRate.toString());
+			window.history.replaceState(null, "", url.toString());
 		}
 	</script>
 </body>
