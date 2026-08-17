@@ -262,19 +262,20 @@
 				return;
 			}
 
-			const rawFinalTime = endTime - startTime;
-
-			const finalTime = timeToPossibleFrameTime(rawFinalTime, frameRate);
+			const startFrame = timeToFrame(startTime, frameRate);
+			const endFrame = timeToFrame(endTime, frameRate);
+			const frameCount = endFrame - startFrame;
+			const finalTime = frameCount / frameRate;
 
 			// Format time like "0h 0m 0s 000ms"
-			const hours = Math.floor(finalTime / 3600);
-			const minutes = Math.floor((finalTime % 3600) / 60);
-			const seconds = Math.floor(finalTime % 60);
-			const milliseconds = Math.floor((finalTime % 1) * 1000);
+			const totalMilliseconds = Math.round(finalTime * 1000);
+			const hours = Math.floor(totalMilliseconds / 3_600_000);
+			const minutes = Math.floor((totalMilliseconds % 3_600_000) / 60_000);
+			const seconds = Math.floor((totalMilliseconds % 60_000) / 1000);
+			const milliseconds = totalMilliseconds % 1000;
 
-			const frames = Math.round(finalTime * frameRate);
-			frameCountText.textContent = `${frames} ${frames === 1 ? "frame" : "frames"}`;
-			finalTimeText.textContent = `${hours}h ${minutes}m ${seconds}s ${milliseconds}ms`;
+			frameCountText.textContent = `${frameCount} ${frameCount === 1 ? "frame" : "frames"}`;
+			finalTimeText.textContent = `${hours}h ${minutes}m ${seconds}s ${milliseconds.toString().padStart(3, "0")}ms`;
 
 			// Set URL parameters in case the user wants to share the link
 			const url = new URL(window.location.href);
@@ -368,6 +369,15 @@
 		function timeToPossibleFrameTime(time, fps = 60) {
 			const frameDuration = 1 / fps;
 			return Math.floor(time / frameDuration) * frameDuration;
+		}
+
+		/**
+		 * @param {number} time
+		 * @param {number} fps
+		 * @returns {number}
+		 */
+		function timeToFrame(time, fps) {
+			return Math.round(time * fps);
 		}
 
 		if (finalTimeText) {
