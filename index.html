@@ -246,6 +246,8 @@
 		const frameCountText = document.getElementById("frame-count");
 		const finalTimeText = document.getElementById("final-time");
 
+		let calculatedTime = -1;
+
 		// Read URL parameters and set the video URL and time input value if present
 		const urlParams = new URLSearchParams(window.location.search);
 		const videoId = urlParams.get(VIDEO_URL_PARAM);
@@ -352,6 +354,8 @@
 			const milliseconds = totalMilliseconds % 1000;
 
 			frameCountText.textContent = `${frameCount} ${frameCount === 1 ? "frame" : "frames"}`;
+
+			calculatedTime = finalTime;
 			finalTimeText.textContent = `${hours}h ${minutes}m ${seconds}s ${milliseconds.toString().padStart(3, "0")}ms`;
 
 			// Set URL parameters in case the user wants to share the link
@@ -460,7 +464,16 @@
 		if (finalTimeText) {
 			finalTimeText.onclick = () => {
 				// Copy the final time text to the clipboard
-				navigator.clipboard.writeText(finalTimeText.textContent ?? "").then(() => {
+
+				// Format time like "0:00:00.000" (H:MM:SS.mmm)
+				const totalMilliseconds = Math.round(calculatedTime * 1000);
+				const hours = Math.floor(totalMilliseconds / 3_600_000);
+				const minutes = Math.floor((totalMilliseconds % 3_600_000) / 60_000);
+				const seconds = Math.floor((totalMilliseconds % 60_000) / 1000);
+				const milliseconds = totalMilliseconds % 1000;
+
+				const formattedTime = `${hours}:${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}.${milliseconds.toString().padStart(3, "0")}`;
+				navigator.clipboard.writeText(formattedTime).then(() => {
 					console.log("Final time copied to clipboard");
 				}).catch((err) => {
 					console.error("Could not copy final time to clipboard", err);
